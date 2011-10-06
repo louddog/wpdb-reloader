@@ -1,0 +1,8 @@
+.db_label {
+	padding-right: 5px;
+	text-align: right;
+}
+
+#db_reloader_switch {
+	margin-bottom: 20px;
+}

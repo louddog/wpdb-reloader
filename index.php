@@ -13,8 +13,6 @@ if (!function_exists('noop')) {
 
 new DB_Reloader();
 class DB_Reloader {
-	var $backupPath;
-	
 	function __construct() {
 		add_action('wp', array(&$this, 'schedule'));		
 		add_action('db_reloader', array(&$this, 'reload_db'));
@@ -27,7 +25,6 @@ class DB_Reloader {
 		add_action('admin_notices', array(&$this, 'admin_notices'));
 
 		register_deactivation_hook(__FILE__, array(&$this, 'deactivate'));
-		$this->backupPath = dirname(__FILE__).'/backup';
 	}
 	
 	function schedule() {
@@ -40,7 +37,7 @@ class DB_Reloader {
 	
 	function reload_db() {
 		if (get_option('db_reloader_reloading')) {
-			file_put_contents($this->backupPath.'/cron.log', "reload: ".date('Y:m:d H:i:s')."\n", FILE_APPEND);
+			file_put_contents($this->path('cron.log'), "reload: ".date('Y:m:d H:i:s')."\n", FILE_APPEND);
 			// reload DB
 		}
 	}
@@ -70,7 +67,7 @@ class DB_Reloader {
 			if (!$this->mysqldump()) $this->add_admin_notice("The mysqldump command could not be found");
 			else if (!current_user_can('manage_options')) $this->add_admin_notice("You do not have permission to save the database state.");
 			else {
-				exec($this->mysqldump()." --user=".DB_USER." --password=".DB_PASSWORD." --add-drop-table --result-file=$this->backupPath/dump.sql --verbose ".DB_NAME, $result, $code);
+				exec($this->mysqldump()." --user=".DB_USER." --password=".DB_PASSWORD." --add-drop-table --result-file=".$this->path('dump.sql')." --verbose ".DB_NAME, $result, $code);
 				if ($code == 0) $this->add_admin_notice("The current database state was successfully saved.");
 				else $this->add_admin_notice("There was an error saving the database state.");
 			}
@@ -125,10 +122,10 @@ class DB_Reloader {
 	function settings() { ?>
 		<p>Database Reloader allows you to take a snapshot of your database, and then repeatedly reload it one the hour. In order to start reloading your database, you need to save a database state.  Set up your site the way you like it, and then save that state here.</p>
 		 
-		<?php if (!is_writeable($this->backupPath)) { ?>
+		<?php if (!is_writeable($this->path())) { ?>
 			<p>
 				In order to save the current database date, the WordPress needs to be able to write it to a file.  Please make the backup file writeable:<br />
-				<code>chmod 777 <?php echo $this->backupPath; ?></code>
+				<code>chmod 777 <?php echo $this->path(); ?></code>
 			</p>
 		<?php } else if (!$this->mysqldump()) { ?>
 			<?php if (defined('DB_RELOADER_MYSQLDUMP_PATH')) { ?>
@@ -154,7 +151,13 @@ class DB_Reloader {
 	<?php }
 	
 	function saved() {
-		return file_exists("$this->backupPath/dump.sql") && trim(file_get_contents("$this->backupPath/dump.sql")) != '';
+		return file_exists($this->path('dump.sql')) && trim(file_get_contents($this->path('dump.sql'))) != '';
+	}
+	
+	function path($file = false) {
+		$path = dirname(__FILE__).'/store';
+		if ($file) $path .= "/$file";
+		return $path;
 	}
 
 	function mysqldump() {
@@ -187,7 +190,9 @@ class DB_Reloader {
 	function deactivate() {
 		delete_option('db_reloader_reloading');
 		wp_clear_scheduled_hook('db_reloader');
-		unlink($this->backupPath."/cron.log");
-		unlink($this->backupPath."/dump.sql");
+		
+		foreach(glob($this->path()."/*.*") as $file) {
+			unlink($file);
+		}
 	}
 }

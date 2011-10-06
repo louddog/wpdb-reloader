@@ -195,7 +195,7 @@ class DB_Reloader {
 	}
 
 	function deactivate() {
-		delete_option('db_reloader_reloading');
+		delete_option('db_reloader_messages');
 		wp_clear_scheduled_hook('db_reloader');
 		
 		foreach(glob($this->path()."/*.*") as $file) {

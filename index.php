@@ -9,7 +9,9 @@ Author URI: http://www.louddog.com/
 
 new DB_Reloader();
 class DB_Reloader {
-	var $options = array();
+	var $options = array(
+		'reloading' => false,
+	);
 	
 	function __construct() {
 		add_action('wp', array(&$this, 'schedule'));		

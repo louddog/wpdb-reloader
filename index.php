@@ -9,6 +9,8 @@ Author URI: http://www.louddog.com/
 
 new DB_Reloader();
 class DB_Reloader {
+	var $options = array();
+	
 	function __construct() {
 		add_action('wp', array(&$this, 'schedule'));		
 		add_action('db_reloader', array(&$this, 'reload_db'));
@@ -21,6 +23,8 @@ class DB_Reloader {
 		add_action('admin_notices', array(&$this, 'admin_notices'));
 
 		register_deactivation_hook(__FILE__, array(&$this, 'deactivate'));
+		$options = @file_get_contents($this->path('config.txt'));
+		if ($options) $this->options = unserialize($options);
 	}
 	
 	function schedule() {
@@ -32,7 +36,7 @@ class DB_Reloader {
 	}
 	
 	function reload_db() {
-		if (get_option('db_reloader_reloading')) {
+		if ($this->options['reloading']) {
 			file_put_contents($this->path('cron.log'), "reload: ".date('Y:m:d H:i:s')."\n", FILE_APPEND);
 			// reload DB
 		}
@@ -44,7 +48,7 @@ class DB_Reloader {
 	}
 
 	function warning() {
-		if (get_option('db_reloader_reloading')) { ?>
+		if ($this->options['reloading']) { ?>
 			<p id="db_reloader_warning">This website's data reloads on the hour.</p>
 			
 			<style type="text/css" media="screen">
@@ -73,14 +77,16 @@ class DB_Reloader {
 		}
 		
 		if (isset($_POST['db_reloader_start_reloading'])) {
-			update_option('db_reloader_reloading', true);
+			$this->options['reloading'] = true;
+			$this->save_options();
 			$this->add_admin_notice("The database will now start reloading.");
 			header("Location: ".$_SERVER['REQUEST_URI']);
 			exit;
 		}
 		
 		if (isset($_POST['db_reloader_stop_reloading'])) {
-			update_option('db_reloader_reloading', false);
+			$this->options['reloading'] = false;
+			$this->save_options();
 			$this->add_admin_notice("The database will not reload anymore.");
 			header("Location: ".$_SERVER['REQUEST_URI']);
 			exit;
@@ -116,13 +122,14 @@ class DB_Reloader {
 	}
 	
 	function settings() { ?>
-		<p>Database Reloader allows you to take a snapshot of your database, and then repeatedly reload it one the hour. In order to start reloading your database, you need to save a database state.  Set up your site the way you like it, and then save that state here.</p>
+		<p>Database Reloader allows you to take a snapshot of your database, and then repeatedly reload it one the hour. In order to start reloading your database, you need to save a database state.  Set up your site the way you like it, and then save that state here.  This plugin's settings are stored in a local file, not in the database.  So, you don't need to worry about the WPDB Reloader settings being overwritten.</p>
 		 
 		<?php if (!is_writeable($this->path())) { ?>
 			<p>
-				In order to save the current database date, the WordPress needs to be able to write it to a file.  Please make the backup file writeable:<br />
+				In order to operate, WPDB Reloader needs write permissions on the storage directory.  Please make the storage directory writeable:<br />
 				<code>chmod 777 <?php echo $this->path(); ?></code>
 			</p>
+			<p>Once the directory is writeable, <a href="<?php echo $_SERVER['REQUEST_URI']; ?>">refresh</a> this page.</p>
 		<?php } else if (!$this->mysqldump()) { ?>
 			<?php if (defined('DB_RELOADER_MYSQLDUMP_PATH')) { ?>
 				<p>The path to <code>mysqldump</code> defined in <code>DB_RELOADER_MYSQLDUMP_PATH (<?php echo DB_RELOADER_MYSQLDUMP_PATH; ?>)</code> isn't working.</p>
@@ -134,8 +141,8 @@ class DB_Reloader {
 			<form id="db_reloader_save_state_form" action="<?php echo admin_url('options-general.php?page=db_reloader'); ?>" method="post">
 				<input type="submit" name="db_reloader_save_state" value="Save Database State" />
 				
-				<?php if ($this->saved()) { ?>
-					<?php if (get_option('db_reloader_reloading')) { ?>
+				<?php if ($this->state_saved()) { ?>
+					<?php if ($this->options['reloading']) { ?>
 						<input type="submit" name="db_reloader_stop_reloading" value="Stop Reloading" />
 					<?php } else { ?>
 						<input type="submit" name="db_reloader_start_reloading" value="Start Reloading" />
@@ -146,7 +153,11 @@ class DB_Reloader {
 
 	<?php }
 	
-	function saved() {
+	function save_options() {
+		file_put_contents($this->path('config.txt'), serialize($this->options));
+	}
+	
+	function state_saved() {
 		return file_exists($this->path('dump.sql')) && trim(file_get_contents($this->path('dump.sql'))) != '';
 	}
 	

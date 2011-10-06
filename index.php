@@ -15,12 +15,54 @@ new DB_Reloader();
 class DB_Reloader {
 	var $backupPath;
 	
-	function __construct() {		
+	function __construct() {
+		add_action('wp', array(&$this, 'schedule'));		
+		add_action('db_reloader', array(&$this, 'reload_db'));
+		
+		add_action('wp_print_styles', array(&$this, 'site_style'));
+		add_action('wp_footer', array(&$this, 'warning'));
+
 		add_action('admin_init', array(&$this, 'admin_init'));
 		add_action('admin_menu', array(&$this, 'admin_menu'));
 		add_action('admin_notices', array(&$this, 'admin_notices'));
+
 		register_deactivation_hook(__FILE__, array(&$this, 'deactivate'));
 		$this->backupPath = dirname(__FILE__).'/backup';
+	}
+	
+	function schedule() {
+		if (!wp_next_scheduled('db_reloader')) {
+			$now = getdate();
+			$next = mktime($now['hours'] + 1, 0);
+			wp_schedule_event($next, 'hourly', 'db_reloader');
+		}
+	}
+	
+	function reload_db() {
+		if (get_option('db_reloader_reloading')) {
+			file_put_contents($this->backupPath.'/cron.log', "reload: ".date('Y:m:d H:i:s')."\n", FILE_APPEND);
+			// reload DB
+		}
+	}
+	
+	function site_style() {
+		wp_register_style('db_reloader', plugin_dir_url(__FILE__).'css/style.css');
+		wp_enqueue_style('db_reloader');
+	}
+
+	function warning() {
+		if (get_option('db_reloader_reloading')) { ?>
+			<p id="db_reloader_warning">This website's data reloads on the hour.</p>
+			
+			<style type="text/css" media="screen">
+				<?php $height = is_admin_bar_showing() ? 43 : 15; ?>
+				html { margin-top: <?php echo $height; ?>px !important; }
+				* html body { margin-top: <?php echo $height; ?>px !important; }
+				<?php if (is_admin_bar_showing()) { ?>
+					#db_reloader_warning { top: 28px; }
+				<?php } ?>
+			</style>
+		<?php }
 	}
 	
 	function admin_init() {
@@ -144,5 +186,8 @@ class DB_Reloader {
 
 	function deactivate() {
 		delete_option('db_reloader_reloading');
+		wp_clear_scheduled_hook('db_reloader');
+		unlink($this->backupPath."/cron.log");
+		unlink($this->backupPath."/dump.sql");
 	}
 }

@@ -1,0 +1,13 @@
+#db_reloader_warning {
+	position: fixed;
+	z-index: 1000;
+	top: 0;
+	left: 0;
+	margin: 0;
+	padding: 5px 10px;
+	width: 100%;
+	background-color: #EE5;
+	border-bottom: 1px solid #440;
+	color: #440;
+	font: 12px Verdana;
+}

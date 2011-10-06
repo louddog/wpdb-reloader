@@ -7,10 +7,6 @@ Version: 0.1
 Author URI: http://www.louddog.com/
 */
 
-if (!function_exists('noop')) {
-	function noop() {}
-}
-
 new DB_Reloader();
 class DB_Reloader {
 	function __construct() {

@@ -23,9 +23,9 @@ class DB_Reloader {
 	);
 	
 	function __construct() {
-		register_activation_hook(__FILE__, array(&$this, 'activate'));
 		register_deactivation_hook(__FILE__, array(&$this, 'deactivate'));
 
+		add_action('wp', array(&$this, 'schedule'));		
 		add_action('db_reloader', array(&$this, 'reload_db'));
 		
 		add_action('wp_print_styles', array(&$this, 'site_style'));
@@ -39,28 +39,22 @@ class DB_Reloader {
 		if ($options) $this->options = unserialize($options);
 	}
 	
-	function activate() {
-		$now = getdate();
-		$next = mktime($now['hours'] + 1, 0);
-		wp_schedule_event($next, 'hourly', 'db_reloader');
-	}
-	
-	function deactivate() {
-		delete_option('db_reloader_messages');
-		wp_clear_scheduled_hook('db_reloader');
-		
-		foreach(glob($this->path()."/*.*") as $file) {
-			unlink($file);
+	function schedule() {
+		if (!wp_next_scheduled('db_reloader')) {
+			$now = getdate();
+			$next = mktime($now['hours'] + 1, 0);
+			wp_schedule_event($next, 'hourly', 'db_reloader');
 		}
 	}
-
+	
 	function reload_db() {
 		if ($this->options['reloading']) {
 			file_put_contents($this->path('cron.log'), "reload: ".date('Y:m:d H:i:s')."\n", FILE_APPEND);
 			exec($this->cmdpath('mysql')." --user=".DB_USER." --password=".DB_PASSWORD." --database=".DB_NAME." < ".$this->path('dump.sql'), $result, $code);
 		}
 	}
-	
+
+
 	function site_style() {
 		wp_register_style('db_reloader', plugin_dir_url(__FILE__).'css/style.css');
 		wp_enqueue_style('db_reloader');
@@ -218,5 +212,14 @@ class DB_Reloader {
 		}
 		
 		return isset($paths[$cmd]) ? $paths[$cmd] : false;
+	}
+
+	function deactivate() {
+		delete_option('db_reloader_messages');
+		wp_clear_scheduled_hook('db_reloader');
+		
+		foreach(glob($this->path()."/*.*") as $file) {
+			unlink($file);
+		}
 	}
 }

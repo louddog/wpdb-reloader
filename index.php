@@ -23,6 +23,9 @@ class DB_Reloader {
 	);
 	
 	function __construct() {
+		register_activation_hook(__FILE__, array(&$this, 'activate'));
+		register_deactivation_hook(__FILE__, array(&$this, 'deactivate'));
+
 		add_action('wp', array(&$this, 'schedule'));		
 		add_action('db_reloader', array(&$this, 'reload_db'));
 		
@@ -33,19 +36,25 @@ class DB_Reloader {
 		add_action('admin_menu', array(&$this, 'admin_menu'));
 		add_action('admin_notices', array(&$this, 'admin_notices'));
 
-		register_deactivation_hook(__FILE__, array(&$this, 'deactivate'));
 		$options = @file_get_contents($this->path('config.txt'));
 		if ($options) $this->options = unserialize($options);
 	}
 	
-	function schedule() {
-		if (!wp_next_scheduled('db_reloader')) {
-			$now = getdate();
-			$next = mktime($now['hours'] + 1, 0);
-			wp_schedule_event($next, 'hourly', 'db_reloader');
-		}
+	function activate() {
+		$now = getdate();
+		$next = mktime($now['hours'] + 1, 0);
+		wp_schedule_event($next, 'hourly', 'db_reloader');
 	}
 	
+	function deactivate() {
+		delete_option('db_reloader_messages');
+		wp_clear_scheduled_hook('db_reloader');
+		
+		foreach(glob($this->path()."/*.*") as $file) {
+			unlink($file);
+		}
+	}
+
 	function reload_db() {
 		if ($this->options['reloading']) {
 			file_put_contents($this->path('cron.log'), "reload: ".date('Y:m:d H:i:s')."\n", FILE_APPEND);
@@ -134,7 +143,7 @@ class DB_Reloader {
 	
 	function settings() { ?>
 		<p>Database Reloader allows you to take a snapshot of your database, and then repeatedly reload it one the hour. In order to start reloading your database, you need to save a database state.  Set up your site the way you like it, and then save that state here.  This plugin's settings are stored in a local file, not in the database.  So, you don't need to worry about the WPDB Reloader settings being overwritten.</p>
-		 
+		
 		<?php if (!is_writeable($this->path())) { ?>
 			
 			<p>
@@ -166,15 +175,15 @@ class DB_Reloader {
 				
 				<?php if ($this->state_saved()) { ?>
 					<?php if ($this->options['reloading']) { ?>
-						<input type="submit" name="db_reloader_stop_reloading" value="Stop Reloading" />
+						<input type="submit" name="db_reloader_stop_reloading" value="Stop Reloading" style="background-color: #FBB;" />
 					<?php } else { ?>
-						<input type="submit" name="db_reloader_start_reloading" value="Start Reloading" />
+						<input type="submit" name="db_reloader_start_reloading" value="Start Reloading" style="background-color: #6E6;" />
 					<?php } ?>
 				<?php } ?>
 			</form>
 			
 		<?php } ?>
-
+		
 	<?php }
 	
 	function save_options() {
@@ -210,14 +219,5 @@ class DB_Reloader {
 		}
 		
 		return isset($paths[$cmd]) ? $paths[$cmd] : false;
-	}
-
-	function deactivate() {
-		delete_option('db_reloader_messages');
-		wp_clear_scheduled_hook('db_reloader');
-		
-		foreach(glob($this->path()."/*.*") as $file) {
-			unlink($file);
-		}
 	}
 }

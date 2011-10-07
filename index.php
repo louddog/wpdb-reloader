@@ -13,6 +13,15 @@ class DB_Reloader {
 		'reloading' => false,
 	);
 	
+	var $paths = array(
+		'/usr/bin',
+		'/usr/local/bin',
+		'/usr/local/mysql/bin',
+		'/usr/mysql/bin',
+		'/Applications/MAMP/Library/bin',
+		'.',
+	);
+	
 	function __construct() {
 		add_action('wp', array(&$this, 'schedule'));		
 		add_action('db_reloader', array(&$this, 'reload_db'));
@@ -66,10 +75,10 @@ class DB_Reloader {
 	
 	function admin_init() {
 		if (isset($_POST['db_reloader_save_state'])) {
-			if (!$this->mysqldump()) $this->add_admin_notice("The mysqldump command could not be found");
+			if (!$this->cmdpath('mysqldump')) $this->add_admin_notice("The mysqldump command could not be found");
 			else if (!current_user_can('manage_options')) $this->add_admin_notice("You do not have permission to save the database state.");
 			else {
-				exec($this->mysqldump()." --user=".DB_USER." --password=".DB_PASSWORD." --add-drop-table --result-file=".$this->path('dump.sql')." --verbose ".DB_NAME, $result, $code);
+				exec($this->cmdpath('mysqldump')." --user=".DB_USER." --password=".DB_PASSWORD." --add-drop-table --result-file=".$this->path('dump.sql')." --verbose ".DB_NAME, $result, $code);
 				if ($code == 0) $this->add_admin_notice("The current database state was successfully saved.");
 				else $this->add_admin_notice("There was an error saving the database state.");
 			}
@@ -127,19 +136,31 @@ class DB_Reloader {
 		<p>Database Reloader allows you to take a snapshot of your database, and then repeatedly reload it one the hour. In order to start reloading your database, you need to save a database state.  Set up your site the way you like it, and then save that state here.  This plugin's settings are stored in a local file, not in the database.  So, you don't need to worry about the WPDB Reloader settings being overwritten.</p>
 		 
 		<?php if (!is_writeable($this->path())) { ?>
+			
 			<p>
 				In order to operate, WPDB Reloader needs write permissions on the storage directory.  Please make the storage directory writeable:<br />
 				<code>chmod 777 <?php echo $this->path(); ?></code>
 			</p>
 			<p>Once the directory is writeable, <a href="<?php echo $_SERVER['REQUEST_URI']; ?>">refresh</a> this page.</p>
-		<?php } else if (!$this->mysqldump()) { ?>
-			<?php if (defined('DB_RELOADER_MYSQLDUMP_PATH')) { ?>
-				<p>The path to <code>mysqldump</code> defined in <code>DB_RELOADER_MYSQLDUMP_PATH (<?php echo DB_RELOADER_MYSQLDUMP_PATH; ?>)</code> isn't working.</p>
-			<?php } else { ?>
-				<p>Cannot find the path to <code>mysqldump</code>.  Place the following code in your functions.php file, and set the correct path:</p>
-				<code>define('DB_RELOADER_MYSQLDUMP_PATH', '/absolute/path/to/mysqldump');</code>
-			<?php } ?>
+			
+		<?php } else if (!$this->cmdpath('mysql') || !$this->cmdpath('mysqldump')) { ?>
+			
+			<?php
+				foreach (array_keys($this->cmdpaths) as $cmd) {
+					if (!$this->cmdpath($cmd)) {
+						$constant = 'DB_RELOADER_'.strtoupper($cmd).'_PATH';
+						if (defined($constant)) {
+							echo "<p>The path to <code>$cmd</code> defined in <code>$constant (".constant($constant).")</code> isn't working.</p>";
+						} else {
+							echo "<p>Cannot find the path to <code>$cmd</code>.  Place the following code in your functions.php file, and set the correct path:</p>";
+							echo "<p><code>define('$constant', '/absolute/path/to/$cmd');</code></p>";
+						}
+					}
+				}
+			?>
+			
 		<?php } else { ?>
+			
 			<form id="db_reloader_save_state_form" action="<?php echo admin_url('options-general.php?page=db_reloader'); ?>" method="post">
 				<input type="submit" name="db_reloader_save_state" value="Save Database State" />
 				
@@ -151,6 +172,7 @@ class DB_Reloader {
 					<?php } ?>
 				<?php } ?>
 			</form>
+			
 		<?php } ?>
 
 	<?php }
@@ -168,32 +190,26 @@ class DB_Reloader {
 		if ($file) $path .= "/$file";
 		return $path;
 	}
-
-	function mysqldump() {
-		static $path = false;
-		if ($path) return $path;
+	
+	function cmdpath($cmd) {
+		static $paths = array();
+		if (array_key_exists($cmd, $paths)) return $paths[$cmd];
 		
-		foreach (array(
-			'/usr/bin/mysqldump',
-			'/usr/local/bin/mysqldump',
-			'/usr/local/mysql/bin/mysqldump',
-			'/usr/mysql/bin/mysqldump',
-			'/Applications/MAMP/Library/bin/mysqldump',
-			'mysqldump',
-		) as $possible) {
-			exec($possible, $result, $code);
+		foreach ($this->paths as $path) {
+			exec("$path/$cmd", $result, $code);
 			if ($code != 127) {
-				$path = $possible;
+				$paths[$cmd] = "$path/$cmd";
 				break;
 			}
 		}
 		
-		if (defined('DB_RELOADER_MYSQLDUMP_PATH')) {
-			exec(DB_RELOADER_MYSQLDUMP_PATH, $result, $code);
-			if ($code != 127) $path = DB_RELOADER_MYSQLDUMP_PATH;
+		$constant = 'DB_RELOADER_'.strtoupper($cmd).'_PATH';
+		if (defined($constant)) {
+			exec(constant($constant), $result, $code);
+			if ($code != 127) $paths[$cmd] = constant($constant);
 		}
 		
-		return $path;
+		return isset($paths[$cmd]) ? $paths[$cmd] : false;
 	}
 
 	function deactivate() {

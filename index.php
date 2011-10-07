@@ -26,7 +26,6 @@ class DB_Reloader {
 		register_activation_hook(__FILE__, array(&$this, 'activate'));
 		register_deactivation_hook(__FILE__, array(&$this, 'deactivate'));
 
-		add_action('wp', array(&$this, 'schedule'));		
 		add_action('db_reloader', array(&$this, 'reload_db'));
 		
 		add_action('wp_print_styles', array(&$this, 'site_style'));

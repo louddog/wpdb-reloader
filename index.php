@@ -49,7 +49,7 @@ class DB_Reloader {
 	function reload_db() {
 		if ($this->options['reloading']) {
 			file_put_contents($this->path('cron.log'), "reload: ".date('Y:m:d H:i:s')."\n", FILE_APPEND);
-			// reload DB
+			exec($this->cmdpath('mysql')." --user=".DB_USER." --password=".DB_PASSWORD." --database=".DB_NAME." < ".$this->path('dump.sql'), $result, $code);
 		}
 	}
 	

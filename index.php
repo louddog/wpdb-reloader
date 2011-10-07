@@ -168,7 +168,7 @@ class DB_Reloader {
 				
 				<?php if ($this->state_saved()) { ?>
 					<?php if ($this->options['reloading']) { ?>
-						<input type="submit" name="db_reloader_stop_reloading" value="Stop Reloading" style="background-color: #FBB;" />
+						<input type="submit" name="db_reloader_stop_reloading" value="Stop Reloading" style="background-color: #FAA;" />
 					<?php } else { ?>
 						<input type="submit" name="db_reloader_start_reloading" value="Start Reloading" style="background-color: #6E6;" />
 					<?php } ?>
